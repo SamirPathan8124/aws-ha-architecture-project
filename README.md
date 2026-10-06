@@ -62,11 +62,11 @@ Also:
 
 Screenshots (replace FILE with your actual file names):
 
-* ![Targets healthy] (<img width="832" height="374" alt="Screenshot 2026-10-04 181112" src="https://github.com/user- attachments/assets/bc06df5c-26e2-4a98-b634-b4df75f0e209" />)
-* ![Response from 1a](https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/Project%201%20screenshots/Screenshot%202026-10-04%20174737.png)
-* ![Response from 1b](https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/Project%201%20screenshots/Screenshot%202026-10-04%20174720.png)
-* ![ASG activity after termination](https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/Project%201%20screenshots/Screenshot%202026-10-04%20181013.png)
-* ![Security group rules](https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/Project%201%20screenshots/Screenshot%202026-10-04%20192123.png)
+* ![Targets healthy]  screenshots/Screenshot 2026-10-04 181112.png
+* ![Response from 1a] screenshots/Screenshot 2026-10-04 174737.png
+* ![Response from 1b] screenshots/Screenshot 2026-10-04 174720.png
+* ![ASG activity after termination] screenshots/Screenshot 2026-10-04 181030.png
+* ![Security group rules] screenshots/Screenshot 2026-10-04 192123.png
 
 ## Problems I hit and how I fixed them
 
