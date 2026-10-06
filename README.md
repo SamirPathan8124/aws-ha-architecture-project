@@ -62,7 +62,7 @@ Also:
 
 Screenshots (replace FILE with your actual file names):
 
-* ![Targets healthy](<img width="832" height="374" alt="Screenshot 2026-10-04 181112" src="https://github.com/user- attachments/assets/bc06df5c-26e2-4a98-b634-b4df75f0e209" />)
+* ![Targets healthy] (<img width="832" height="374" alt="Screenshot 2026-10-04 181112" src="https://github.com/user- attachments/assets/bc06df5c-26e2-4a98-b634-b4df75f0e209" />)
 * ![Response from 1a](https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/Project%201%20screenshots/Screenshot%202026-10-04%20174737.png)
 * ![Response from 1b](https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/Project%201%20screenshots/Screenshot%202026-10-04%20174720.png)
 * ![ASG activity after termination](https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/Project%201%20screenshots/Screenshot%202026-10-04%20181013.png)
@@ -84,19 +84,20 @@ Screenshots (replace FILE with your actual file names):
 
 The same architecture is deployed via code.
 
-```bash
 terraform init
 terraform plan
-terraform apply     # needs approval
-terraform destroy   # cleanup when done
+terraform apply      # needs approval
+terraform destroy    # cleanup when done
 
-## Phase 3: CI/CD Pipeline & Automation
+---
+
+# Phase 3: CI/CD Pipeline & Automation
 
 Automated deployment workflow using GitHub Actions.
 
-- **Trigger:** Push to `main` branch automatically runs `terraform plan`.
-- **Approval:** Manual review and approval required before running `terraform apply`.
-- **State Management:** Remote backend configured with AWS S3 and DynamoDB table for state locking and team collaboration.
+- **Trigger:** Push to 'main' branch automatically runs 'terraform plan'.
+- **Approval:** Manual review and approval required before running 'terraform apply'.
+- **State Management:** Remote backend configured with AWS S3 and DynamoDB table for state locking.
 
 ## Design decisions and trade-offs
 
