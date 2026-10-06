@@ -1,6 +1,6 @@
 # AWS High Availability Architecture
 
-A highly available web tier on AWS, built in the console (Phase 1) and tested by terminating a server while the site stayed up. Terraform version (Phase 2) is in progress.
+A highly available web tier on AWS, first built in the console (Phase 1), then rebuilt with Terraform (Phase 2) and deployed through a GitHub Actions pipeline (Phase 3). Tested by terminating a server while the site stayed up.
 
 > Built as a learning project in `ap-south-1` (Mumbai). Resources were torn down after testing to avoid cost.
 
@@ -15,7 +15,7 @@ Internet
 Application Load Balancer (public subnets, 2 AZs)   <- alb-sg
    |
    v
-Auto Scaling Group: 2-4 x EC2 t3.micro (2 AZs)       <- web-sg
+Auto Scaling Group: 2-4 x EC2 t3.micro (public subnets, 2 AZs)       <- web-sg
    |
    v
 RDS MySQL (private subnets)                          <- db-sg
@@ -27,7 +27,7 @@ RDS MySQL (private subnets)                          <- db-sg
 |---|---|---|
 | Network | VPC | `10.0.0.0/16` |
 | Load balancing | ALB + Target Groups | Public subnets |
-| Compute | Launch Template + ASG | Private subnets |
+| Compute        | Launch Template + ASG | Public subnets (web-sg accepts traffic only from alb-sg) |
 | Database | RDS MySQL | Private subnet |
 | Monitoring | CloudWatch | System metrics |
 | Access | IAM | MFA on the root account |
@@ -49,16 +49,18 @@ Also:
 
 ## Phase 1: Console build
 
-1. Opened the ALB URL and refreshed to verify traffic distribution.
-2. Terminated one EC2 instance to test resilience.
-3. [Write what you saw: the instance stopped, and traffic automatically routed to the healthy one].
-4. The Auto Scaling Group launched a replacement instance automatically.
+1. Opened the ALB URL and refreshed several times. The page alternated between the servers in ap-south-1a and ap-south-1b (different private IPs), so traffic was being spread across both AZs.
+2. Terminated the instance in ap-south-1a from the EC2 console and kept refreshing the ALB URL.
+3. The target group marked the terminated instance as unhealthy/draining, and the site kept responding from the 1b instance without going down.
+4. The Auto Scaling Group launched a replacement instance on its own, and the target group showed both targets healthy again after about XX minutes.
+   
 
-| Event | Time | Action |
-|---|---|---|
-| Instance terminated | [06:02] | Manual termination for testing |
-| Replacement instance Running | [06:04] | ASG health check response |
-| Both targets Healthy again | [06:07] | Verified via ALB target group |
+| Event                        | Time (IST) | Action                         |
+| ---------------------------- | ---------- | ------------------------------ |
+| Instance terminated          | 18:07      | Manual termination for testing |
+| Replacement instance Running | 18:10      | Launched by the ASG            |
+| Both targets healthy again   | 18:11      | Checked in the ALB target group |
+
 
 Screenshots :
 
@@ -76,14 +78,17 @@ Screenshots :
 ## Problems I hit and how I fixed them
 
 **502 Bad Gateway from the ALB**
-- Cause: the instances were placed in private subnets without assigning public IPs, so they couldn't fetch updates.
-- Fix: enabled auto-assign public IP on the launch template during troubleshooting.
-- Learning: ELB health checks depend entirely on proper routing and target group response codes.
 
-**Hard-coded database password in user data script**
-- Cause: a placeholder password was left in plain text.
-- Fix: moved it to a sensitive environment variable using AWS Secrets Manager.
-- Learning: secrets never belong in code or user-data scripts.
+- Problem: opening the ALB URL gave 502 Bad Gateway, and the targets in the target group showed as unhealthy.
+- Cause: the instances were launched without a public IP, and this setup has no NAT Gateway. So they could not reach the internet, user-data could not install the web server, and the health checks failed.
+- Fix: enabled auto-assign public IP in the launch template and replaced the instances. The targets turned healthy and the site loaded.
+- Learning: the ALB talks to the instances over their private IPs, but the instances still need outbound internet access (public IP or NAT Gateway) to install packages. A 502 usually means the targets are unhealthy.
+
+**Hard-coded database password in user data**
+
+- Problem: while writing the user-data script I left a placeholder database password in plain text.
+- Fix: removed it from the script and [moved it to AWS Secrets Manager / passed it as a sensitive Terraform variable]. Kept `*.tfstate` out of the repo with `.gitignore`.
+- Learning: secrets do not belong in scripts or in the repo.
 
 ## Phase 2: Infrastructure as Code (Terraform)
 
@@ -95,6 +100,11 @@ Screenshots :
 
    terraform apply, # needs approval
    terraform destroy    # cleanup when done
+
+ ![Terraform apply output]
+
+   <img width="955" height="467" alt="Screenshot 2026-10-06 000454" src="https://github.com/user-attachments/assets/d8fb0e60-  a1e7-4196-8ba6-def3945749fa" />
+<img width="958" height="467" alt="Screenshot 2026-10-06 000536" src="https://github.com/user-attachments/assets/5b050ef5-b3c6-432e-8d17-3cbd6c8fa411" />
 
 ---
 
@@ -108,14 +118,21 @@ Automated deployment workflow using GitHub Actions.
 
 ## Design decisions and trade-offs
 
-- **No NAT Gateway.** It costs money per hour and is not covered by free credits. Instances are in public subnets, but their security group only accepts traffic from the load balancer. In production I would use private subnets with a NAT Gateway per AZ.
-- **RDS is Single-AZ.** The free plan did not allow Multi-AZ. In production I would enable Multi-AZ for automatic failover.
-- **The database is not connected to an application yet.** This project focuses on the infrastructure and its protection. A small app using the database is a possible next step.
-- **Resources deleted after testing** to keep costs near zero.
+- [ ] Enable Multi-AZ on RDS and test failover
+- [ ] Add an HTTPS listener (ACM certificate) on the ALB
+- [ ] Add CloudWatch alarms and an Auto Scaling policy
+- [ ] Connect a small app to the database
 
 ## What this project covers
 
 ​   VPC design and routing, security group chaining, load balancing, Auto Scaling and health checks, private database  placement, CloudWatch alarms, Terraform basics, cost awareness, troubleshooting.
+
+## What I learned
+
+- How chained security groups work: the web servers only accept traffic from the load balancer, and the database only from the web servers.
+- How the ALB health checks decide which instances get traffic, and why a failing health check shows up as a 502.
+- How the Auto Scaling Group replaces a terminated instance without any manual step.
+- How to rebuild the console setup in Terraform and run it through a GitHub Actions pipeline.
 
 ## Roadmap
 
