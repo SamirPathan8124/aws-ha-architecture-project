@@ -219,7 +219,7 @@ resource "aws_lb_listener" "http" {
 # 10. Launch Template for Auto Scaling Group (with Apache User Data showing Instance ID & AZ)
 resource "aws_launch_template" "web_lt" {
   name_prefix   = "ha-web-lt-"
-  image_id      = "ami-0f58b397bc5c1f2e8" 
+  image_id      = "ami-0f58b397bc5c1f2e8"
   instance_type = "t3.micro"
 
   network_interfaces {
