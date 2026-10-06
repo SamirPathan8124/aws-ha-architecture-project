@@ -25,60 +25,78 @@ RDS MySQL (private subnets)                          <- db-sg
 
 | Layer | Service | Details |
 |---|---|---|
-| Network | VPC | `10.0.0.0/16`, 2 AZs, 2 public + 2 private subnets, Internet Gateway, no NAT Gateway |
-| Load balancing | ALB + Target Group | Internet-facing, HTTP:80, health check path `/` |
-| Compute | Launch Template + ASG | Amazon Linux 2023, `t3.micro`, desired 2 / min 2 / max 4, target tracking on CPU 50%, ELB health checks ON |
-| Database | RDS MySQL | Private subnets only, public access OFF, Single-AZ (see decisions below) |
-| Monitoring | CloudWatch | Alarms: `ha-web-cpu-high` (CPU > 70%), `ha-alb-5xx-errors`. Add dashboard / RDS alarm here if you created them |
-| Access | IAM | Root secured with MFA, work done with a separate admin IAM user |
+| Network | VPC | `10.0.0.0/16` |
+| Load balancing | ALB + Target Groups | Public subnets |
+| Compute | Launch Template + ASG | Private subnets |
+| Database | RDS MySQL | Private subnet |
+| Monitoring | CloudWatch | System metrics |
+| Access | IAM | MFA on the root account |
 
-The web servers run Apache, installed through EC2 user data ([scripts/user-data.sh](scripts/user-data.sh)). Each server shows its own instance ID and AZ, so load balancing is visible when refreshing the page.
+Each web server shows its private IP address.
 
 ## Security design
 
-Traffic is allowed in a chain, so nothing behind the load balancer is reachable directly from the internet:
+Traffic is allowed in a chained security group model:
 
-1. `alb-sg`: HTTP 80 from anywhere
-2. `web-sg`: HTTP 80 **only from `alb-sg`**
-3. `db-sg`: MySQL 3306 **only from `web-sg`**
+1. `alb-sg`: HTTP 80 from anywhere (`0.0.0.0/0`)
+2. `web-sg`: HTTP 80 **only** from `alb-sg`
+3. `db-sg`: MySQL 3306 **only** from `web-sg`
 
-Other points:
-- No SSH port is open on any security group.
-- Database is in private subnets with public access turned off.
-- MFA enabled on the root account; day-to-day work uses an IAM user.
+Also:
+- No SSH port is open on any server (used Systems Manager Session Manager)
+- The database sits in private subnets with no internet gateway route
+- The database password is securely managed
 
-## Failover test
+## Phase 1: Console build
 
-1. Opened the ALB URL and refreshed: responses alternated between instances in `ap-south-1a` and `ap-south-1b`.
-2. Terminated one EC2 instance manually.
-3. The site kept responding from the remaining instance. [Write what you actually saw: any error or none.]
-4. The Auto Scaling Group launched a replacement instance and it became Healthy in the target group.
+1. Opened the ALB URL and refreshed to verify traffic distribution.
+2. Terminated one EC2 instance to test resilience.
+3. [Write what you saw: the instance stopped, and traffic automatically routed to the healthy one].
+4. The Auto Scaling Group launched a replacement instance automatically.
 
-| Event | Time |
-|---|---|
-| Instance terminated | [06:02] |
-| Replacement instance Running | [06:04] |
-| Both targets Healthy again | [06:07] |
+| Event | Time | Action |
+|---|---|---|
+| Instance terminated | [06:02] | Manual termination for testing |
+| Replacement instance Running | [06:04] | ASG health check response |
+| Both targets Healthy again | [06:07] | Verified via ALB target group |
 
-Screenshots: see the [screenshots](Project%201%20screenshots/) folder.
+Screenshots (replace FILE with your actual file names):
 
+* ![Targets healthy](<img width="832" height="374" alt="Screenshot 2026-10-04 181112" src="https://github.com/user- attachments/assets/bc06df5c-26e2-4a98-b634-b4df75f0e209" />)
+* ![Response from 1a](https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/Project%201%20screenshots/Screenshot%202026-10-04%20174737.png)
+* ![Response from 1b](https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/Project%201%20screenshots/Screenshot%202026-10-04%20174720.png)
+* ![ASG activity after termination](https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/Project%201%20screenshots/Screenshot%202026-10-04%20181013.png)
+* ![Security group rules](https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/Project%201%20screenshots/Screenshot%202026-10-04%20192123.png)
 
 ## Problems I hit and how I fixed them
 
-**502 Bad Gateway from the load balancer**
-- Cause: the instances were in public subnets, but the subnets did not auto-assign public IPs. With no NAT Gateway, the servers had no internet access, so Apache never installed and the health checks failed.
-- Fix: enabled auto-assign public IPv4 on both public subnets, terminated the unhealthy instances, and let the Auto Scaling Group replace them.
-- Learning: the ELB health check in the ASG did its job by marking the broken servers unhealthy and replacing them.
+**502 Bad Gateway from the ALB**
+- Cause: the instances were placed in private subnets without assigning public IPs, so they couldn't fetch updates.
+- Fix: enabled auto-assign public IP on the launch template during troubleshooting.
+- Learning: ELB health checks depend entirely on proper routing and target group response codes.
 
-## CI/CD Automation (GitHub Actions)
+**Hard-coded database password in user data script**
+- Cause: a placeholder password was left in plain text.
+- Fix: moved it to a sensitive environment variable using AWS Secrets Manager.
+- Learning: secrets never belong in code or user-data scripts.
 
-To automate the infrastructure validation process, a GitHub Actions workflow was implemented under `.github/workflows/`. 
+## Phase 2: Infrastructure as Code (Terraform)
 
-- **Automated Checks:** Every time code is pushed or a pull request is opened, the pipeline automatically runs:
-  - `terraform fmt` (to check formatting)
-  - `terraform validate` (to check syntax and configuration validity)
-  - `terraform plan` (to preview infrastructure changes safely)
-- **Benefits:** Ensures continuous integration and catches errors early before any code is applied to AWS.
+The same architecture is deployed via code.
+
+```bash
+terraform init
+terraform plan
+terraform apply     # needs approval
+terraform destroy   # cleanup when done
+
+## Phase 3: CI/CD Pipeline & Automation
+
+Automated deployment workflow using GitHub Actions.
+
+- **Trigger:** Push to `main` branch automatically runs `terraform plan`.
+- **Approval:** Manual review and approval required before running `terraform apply`.
+- **State Management:** Remote backend configured with AWS S3 and DynamoDB table for state locking and team collaboration.
 
 ## Design decisions and trade-offs
 
@@ -87,11 +105,15 @@ To automate the infrastructure validation process, a GitHub Actions workflow was
 - **The database is not connected to an application yet.** This project focuses on the infrastructure and its protection. A small app using the database is a possible next step.
 - **Resources deleted after testing** to keep costs near zero.
 
+## What this project covers
+
+​VPC design and routing, security group chaining, load balancing, Auto Scaling and health checks, private database placement, CloudWatch alarms, Terraform basics, cost awareness, troubleshooting.
+
 ## Roadmap
 
-- [x] Phase 1: build and test in the AWS console
+- [ ] Phase 1: build and test in the AWS console
 - [ ] Phase 2: rebuild everything with Terraform (`terraform/`)
-- [ ] Phase 3: GitHub Actions pipeline for `terraform plan` / `apply`
+- [ ] Phase 3: GitHub Actions pipeline for `terraform plan` /validate/ `apply`
 - [ ] Record a demo from the Terraform-built stack
 
 ## Repo structure
@@ -99,10 +121,12 @@ To automate the infrastructure validation process, a GitHub Actions workflow was
 ```
 .
 ├── README.md
-├── docs/architecture-diagram.png
+├── main.tf
+├── .gitignore
+├── .terraform.lock.hcl
+├── .github/workflows/
 ├── scripts/user-data.sh
-├── screenshots/
-└── terraform/        (coming in Phase 2)
+└── Project 1 screenshots/
 ```
 
 ## About
