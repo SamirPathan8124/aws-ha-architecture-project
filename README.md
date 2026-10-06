@@ -70,6 +70,16 @@ Screenshots: see the [screenshots](Project%201%20screenshots/) folder.
 - Fix: enabled auto-assign public IPv4 on both public subnets, terminated the unhealthy instances, and let the Auto Scaling Group replace them.
 - Learning: the ELB health check in the ASG did its job by marking the broken servers unhealthy and replacing them.
 
+## CI/CD Automation (GitHub Actions)
+
+To automate the infrastructure validation process, a GitHub Actions workflow was implemented under `.github/workflows/`. 
+
+- **Automated Checks:** Every time code is pushed or a pull request is opened, the pipeline automatically runs:
+  - `terraform fmt` (to check formatting)
+  - `terraform validate` (to check syntax and configuration validity)
+  - `terraform plan` (to preview infrastructure changes safely)
+- **Benefits:** Ensures continuous integration and catches errors early before any code is applied to AWS.
+
 ## Design decisions and trade-offs
 
 - **No NAT Gateway.** It costs money per hour and is not covered by free credits. Instances are in public subnets, but their security group only accepts traffic from the load balancer. In production I would use private subnets with a NAT Gateway per AZ.
