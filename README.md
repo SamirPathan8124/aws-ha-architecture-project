@@ -84,9 +84,11 @@ Screenshots (replace FILE with your actual file names):
 
 The same architecture is deployed via code.
 
-terraform init
-terraform plan
-terraform apply      # needs approval
+terraform init,
+
+terraform plan,
+
+terraform apply, # needs approval
 terraform destroy    # cleanup when done
 
 ---
