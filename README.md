@@ -136,4 +136,5 @@ Automated deployment workflow using GitHub Actions.
 
 Built by Samir Pathan as a hands-on portfolio project to practice cloud infrastructure and high availability on AWS.
 Certifications: Google Cloud Cybersecurity Professional, AWS Generative AI and AI Agents with Amazon Bedrock, Designing Hybrid and Multicloud Architectures, Cloud Native, Microservices, Containers, DevOps and Agile.
+
 LinkedIn: [www.linkedin.com/in/samir-pathan-218b84239]
