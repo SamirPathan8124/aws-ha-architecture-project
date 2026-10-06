@@ -62,11 +62,16 @@ Also:
 
 Screenshots (replace FILE with your actual file names):
 
-* ![Targets healthy]https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20181112.png
-* ![Response from 1a]https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20180751.png
-* ![Response from 1b]https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20174720.png
-* ![ASG activity after termination]https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20181013.png
-* ![Security group rules]https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20192123.png
+* ![Targets healthy]
+* https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20181112.png
+* ![Response from 1a]
+* https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20180751.png
+* ![Response from 1b]
+* https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20174720.png
+* ![ASG activity after termination]
+* https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20181013.png
+* ![Security group rules]
+* https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20192123.png
 
 ## Problems I hit and how I fixed them
 
