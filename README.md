@@ -82,14 +82,14 @@ Screenshots (replace FILE with your actual file names):
 
 ## Phase 2: Infrastructure as Code (Terraform)
 
-The same architecture is deployed via code.
+   The same architecture is deployed via code.
 
-terraform init,
+   terraform init,
 
-terraform plan,
+   terraform plan,
 
-terraform apply, # needs approval
-terraform destroy    # cleanup when done
+   terraform apply, # needs approval
+   terraform destroy    # cleanup when done
 
 ---
 
@@ -110,7 +110,7 @@ Automated deployment workflow using GitHub Actions.
 
 ## What this project covers
 
-​VPC design and routing, security group chaining, load balancing, Auto Scaling and health checks, private database placement, CloudWatch alarms, Terraform basics, cost awareness, troubleshooting.
+​   VPC design and routing, security group chaining, load balancing, Auto Scaling and health checks, private database  placement, CloudWatch alarms, Terraform basics, cost awareness, troubleshooting.
 
 ## Roadmap
 
