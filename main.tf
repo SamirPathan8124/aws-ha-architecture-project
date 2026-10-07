@@ -216,10 +216,14 @@ resource "aws_lb_listener" "http" {
   }
 }
 
+data "aws_ssm_parameter" "al2023" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+}
+
 # 10. Launch Template for Auto Scaling Group (with Apache User Data showing Instance ID & AZ)
 resource "aws_launch_template" "web_lt" {
   name_prefix   = "ha-web-lt-"
-  image_id      = "ami-0f58b397bc5c1f2e8"
+  image_id      = data.aws_ssm_parameter.al2023.value
   instance_type = "t3.micro"
 
 iam_instance_profile {
