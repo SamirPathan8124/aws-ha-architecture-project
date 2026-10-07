@@ -232,14 +232,36 @@ iam_instance_profile {
   }
 
   user_data = base64encode(<<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
-    AZ=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
-    echo "<h1>Hello from High Availability Web Server</h1><p>Instance ID: $INSTANCE_ID</p><p>Availability Zone: $AZ</p>" > /var/www/html/index.html
+  #!/bin/bash
+  yum update -y
+  yum install -y python3 python3-pip git
+  pip3 install flask
+  
+  # Create a simple Flask app directory
+  mkdir -p /app
+  cat << 'EOT' > /app/app.py
+  from flask import Flask
+  import urllib.request
+  
+  app = Flask(__name__)
+
+  @app.route('/')
+  def home():
+      try:
+          instance_id = urllib.request.urlopen('http://169.254.169.254/latest/meta-data/instance-id').read().decode()
+          az = urllib.request.urlopen('http://169.254.169.254/latest/meta-data/placement/availability-zone').read().decode()
+      except:
+          instance_id = "Local"
+          az = "Unknown"
+          
+      return f"<h1>Hello from High Availability Web Server</h1><p>Instance ID: {instance_id}</p><p>Availability Zone: {az}</p>"
+
+  if __name__ == '__main__':
+      app.run(host='0.0.0.0', port=80)
+  EOT
+
+  # Run Flask app in background on port 80
+  python3 /app/app.py &
   EOF
   )
 
