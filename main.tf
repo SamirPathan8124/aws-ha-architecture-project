@@ -283,7 +283,7 @@ resource "aws_db_instance" "mysql_db" {
   allocated_storage      = 20
   db_name                = "mydb"
   username               = "adminuser"
-  password               = "SecurePassword123!" # Production mein ise variables ya secrets manager se lein
+  manage_master_user_password = true
   db_subnet_group_name   = aws_db_subnet_group.db_subnet_group.name
   vpc_security_group_ids = [aws_security_group.db_sg.id]
   publicly_accessible    = false
