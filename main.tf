@@ -195,7 +195,7 @@ resource "aws_lb_target_group" "web_tg" {
   vpc_id   = aws_vpc.main.id
 
   health_check {
-    path                = "/"
+    path                = "/health"
     protocol            = "HTTP"
     matcher             = "200"
     interval            = 30
@@ -221,6 +221,10 @@ resource "aws_launch_template" "web_lt" {
   name_prefix   = "ha-web-lt-"
   image_id      = "ami-0f58b397bc5c1f2e8"
   instance_type = "t3.micro"
+
+iam_instance_profile {
+  name = aws_iam_instance_profile.web_profile.name
+}
 
   network_interfaces {
     associate_public_ip_address = true
@@ -293,4 +297,39 @@ resource "aws_db_instance" "mysql_db" {
   tags = {
     Name = "ha-rds-mysql"
   }
+}
+
+resource "aws_iam_role" "web_role" {
+  name = "ha-web-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ssm" {
+  role       = aws_iam_role.web_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy" "read_db_secret" {
+  name = "read-db-secret"
+  role = aws_iam_role.web_role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "secretsmanager:GetSecretValue"
+      Resource = aws_db_instance.mysql_db.master_user_secret[0].secret_arn
+    }]
+  })
+}
+
+resource "aws_iam_instance_profile" "web_profile" {
+  name = "ha-web-profile"
+  role = aws_iam_role.web_role.name
 }
