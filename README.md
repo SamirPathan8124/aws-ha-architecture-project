@@ -52,7 +52,7 @@ Also:
 1. Opened the ALB URL and refreshed several times. The page alternated between the servers in ap-south-1a and ap-south-1b (different private IPs), so traffic was being spread across both AZs.
 2. Terminated the instance in ap-south-1a from the EC2 console and kept refreshing the ALB URL.
 3. The target group marked the terminated instance as unhealthy/draining, and the site kept responding from the 1b instance without going down.
-4. The Auto Scaling Group launched a replacement instance on its own, and the target group showed both targets healthy again after about XX minutes.
+4. The Auto Scaling Group launched a replacement instance on its own, and the target group showed both targets healthy again after about 1 minutes.
    
 
 | Event                        | Time (IST) | Action                         |
