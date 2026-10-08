@@ -90,7 +90,7 @@ A **Terraform CI** workflow runs on every push and pull request (formatting and 
 
 ---
 
-## Deploy it yourself
+## Deploy it self
 
 **Prerequisites:** AWS account, AWS CLI configured, Terraform installed.
 
@@ -147,4 +147,3 @@ ALB, RDS and Secrets Manager are not fully covered by the AWS Free Tier. Run `te
 - Auto Scaling policies based on CPU
 - `terraform apply` in CI with remote state (S3 + DynamoDB lock)
 - CloudWatch dashboards and alarms
--
