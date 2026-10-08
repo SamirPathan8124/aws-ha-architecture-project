@@ -1,38 +1,59 @@
-# AWS High Availability Architecture
+# AWS High Availability Web Architecture
 
-A highly available web application on AWS, built first by hand in the console, then rebuilt with Terraform and deployed through a GitHub Actions pipeline. I tested it by terminating a server while the site stayed up.
+A highly available web application on AWS, built by hand in the console first, then rebuilt as Terraform code and deployed through a GitHub Actions pipeline with a manual approval gate. I tested resilience by terminating a server on purpose while the site stayed online.
 
-> Built as a learning project in `ap-south-1` (Mumbai). Resources were destroyed after testing to avoid cost.
+> Built as a learning project in `ap-south-1` (Mumbai). All resources were destroyed after testing to avoid cost.
 
-**Stack:** AWS (VPC, ALB, Auto Scaling, EC2, RDS, IAM, SSM, CloudWatch) · Terraform · GitHub Actions · Flask
+**Tech:** AWS (VPC, ALB, Auto Scaling, EC2, RDS, IAM, SSM, Secrets Manager, CloudWatch) · Terraform · GitHub Actions · Flask
+
+---
+
+## Problem statement
+
+A single server is a single point of failure: if it crashes, the website goes down. This project removes that risk by running the application on multiple servers in different Availability Zones behind a load balancer, with automatic replacement of failed servers.
 
 ---
 
 ## Architecture
 
 ```
-                    Internet
-                       |
-                       v
-     Application Load Balancer  (public subnets, 2 AZs)   <- alb-sg
-                       |
-                       v
-     Auto Scaling Group: 2-4 x EC2 t3.micro (2 AZs)       <- web-sg
-                       |
-                       v
-     RDS MySQL  (private subnets, no route to internet)   <- db-sg
+                         Internet
+                            |
+                            v
+        Application Load Balancer (public subnets, 2 AZs)   <- alb-sg
+                            |
+              +-------------+-------------+
+              |                           |
+              v                           v
+        EC2 (AZ 1a)                 EC2 (AZ 1b)             <- web-sg
+              \                           /
+               +--- Auto Scaling Group ---+
+                     (min 2, max 4)
+                            |
+                            v
+              RDS MySQL (private subnets)                   <- db-sg
 ```
 
 | Layer | Service | Details |
 | --- | --- | --- |
-| Network | VPC | `10.0.0.0/16`, public and private subnets across 2 AZs |
-| Load balancing | ALB + Target Group | Public subnets, health check on `/health` |
-| Compute | Launch Template + Auto Scaling Group | 2-4 EC2 instances, Amazon Linux 2023 (AMI from SSM Parameter Store) |
+| Network | VPC | `10.0.0.0/16`, subnets across 2 Availability Zones |
+| Entry point | Application Load Balancer | Public subnets, health check on `/health` |
+| Compute | Launch Template + Auto Scaling Group | 2 to 4 `t3.micro` instances, Amazon Linux 2023 (AMI from SSM Parameter Store) |
 | Database | RDS MySQL | Private subnets, master password managed by RDS in Secrets Manager |
+| Access | IAM role + SSM Session Manager | No SSH keys, no open SSH port |
 | Monitoring | CloudWatch | EC2, ALB and ASG metrics |
-| Access | IAM + SSM Session Manager | MFA on root account, no SSH keys |
+| IaC and CI/CD | Terraform + GitHub Actions | Remote state in S3 with DynamoDB locking |
 
-Each web server shows its own private IP, so refreshing the ALB URL shows traffic being spread across both servers.
+Each web server shows its own private IP, so refreshing the load balancer URL shows requests being spread across servers.
+
+---
+
+## Why this architecture is highly available
+
+- **Multiple Availability Zones:** servers run in two separate data centers, so one AZ failing does not take the site down.
+- **Load balancer:** the ALB spreads traffic across servers and stops sending requests to any server that fails its health check.
+- **Auto Scaling Group:** keeps at least 2 servers running and automatically launches a replacement when one is terminated or unhealthy.
+- **Health checks:** the ALB checks `/health` on every server. Failed servers are removed from rotation and replaced.
 
 ---
 
@@ -44,25 +65,43 @@ Traffic is allowed through a chain of security groups, so each layer only accept
 2. `web-sg`: HTTP 80 **only** from `alb-sg`
 3. `db-sg`: MySQL 3306 **only** from `web-sg`
 
-Also:
+Other measures:
 
-- **No SSH port is open** on any server. I used AWS Systems Manager Session Manager for access.
-- **The database is in private subnets** with no route to an internet gateway.
-- **No password in code.** The database master password is managed by RDS through Secrets Manager.
-- **MFA** is enabled on the root account.
+- **No SSH access.** Servers are managed through AWS Systems Manager Session Manager.
+- **Private database.** RDS sits in private subnets with no route to an internet gateway.
+- **No secrets in code.** The database master password is managed by RDS through Secrets Manager.
+- **IAM role for servers** instead of stored credentials.
+- **MFA** enabled on the root account.
 
 ---
 
-## Phase 1: Console build and failover test
+## Terraform and CI/CD
 
-I built everything manually in the console first to understand how each piece connects.
+**Terraform** (`main.tf`) creates the whole stack: VPC and subnets, security groups, ALB and target group, launch template, Auto Scaling Group, IAM role for SSM, and RDS.
 
-**Failover test**
+```bash
+terraform init      # download providers, connect to remote state
+terraform plan      # preview changes
+terraform apply     # create infrastructure (asks for approval)
+terraform destroy   # remove everything when done
+```
 
-1. Opened the ALB URL and refreshed to confirm traffic was going to both servers.
-2. Terminated one EC2 instance on purpose.
-3. The site kept working because the ALB stopped sending traffic to the terminated instance and used the healthy one.
-4. The Auto Scaling Group launched a replacement instance automatically.
+**GitHub Actions pipeline** (`.github/workflows/`):
+
+- A push to `main` runs `terraform plan` automatically.
+- A manual approval is required before `terraform apply`.
+- State is stored in S3 with a DynamoDB table for locking, so two runs can never change the infrastructure at the same time.
+
+---
+
+## Failure testing
+
+| Test | What I did | Result |
+| --- | --- | --- |
+| Instance failure | Terminated one EC2 instance manually | The site stayed up on the other server; the ASG launched a replacement; both targets became healthy again |
+| Rolling replacement | Ran an Auto Scaling instance refresh | Servers were replaced while the load balancer kept serving traffic |
+
+**Timeline of the instance failure test**
 
 | Event | Time | What happened |
 | --- | --- | --- |
@@ -70,75 +109,74 @@ I built everything manually in the console first to understand how each piece co
 | Replacement instance running | 06:04 | Auto Scaling Group reacted to the failed health check |
 | Both targets healthy again | 06:07 | Verified in the ALB target group |
 
-**Screenshots**
+### Evidence
 
-| | |
-| --- | --- |
-| ![Both targets healthy](screenshots/Screenshot%202026-10-04%20181112.png) | ![ASG activity after termination](screenshots/Screenshot%202026-10-04%20181013.png) |
-| Both targets healthy in the target group | Auto Scaling Group activity after termination |
-| ![Response from server 1a](screenshots/Screenshot%202026-10-04%20180751.png) | ![Response from server 1b](screenshots/Screenshot%202026-10-04%20174720.png) |
-| Response from the server in AZ 1a | Response from the server in AZ 1b |
-| ![Security group rules](screenshots/Screenshot%202026-10-04%20192123.png) | |
-|  Security group rules
+**Both targets healthy in the target group**
+
+![Both targets healthy](screenshots/Screenshot%202026-10-04%20181112.png)
+
+**Auto Scaling Group activity after termination**
+
+![ASG activity after termination](screenshots/Screenshot%202026-10-04%20181013.png)
+
+**Response from the server in AZ 1a**
+
+![Response from server 1a](screenshots/Screenshot%202026-10-04%20180751.png)
+
+**Response from the server in AZ 1b**
+
+![Response from server 1b](screenshots/Screenshot%202026-10-04%20174720.png)
+
+**Chained security group rules**
+
+![Security group rules](screenshots/Screenshot%202026-10-04%20192123.png)
 
 ---
 
-## Problems I hit and how I fixed them
+## Challenges and solutions
 
 **502 Bad Gateway from the ALB**
 
-- **Cause:** the instances had no route to the internet, so they could not download packages and start the web server. The ALB health checks failed and it had nothing healthy to send traffic to.
+- **Cause:** the instances had no route to the internet, so they could not download packages and start the web server. Health checks failed and the ALB had nothing healthy to send traffic to.
 - **Fix:** placed the instances in public subnets with auto-assign public IP enabled. Their security group still accepts traffic only from the ALB.
-- **Learning:** ALB health checks depend on correct routing and on the target actually returning the expected response code.
+- **Learning:** ALB health checks depend on correct routing and on the target returning the expected response code.
 
 **Hard-coded database password in the user-data script**
 
-- **Cause:** I left a placeholder password in plain text in the user-data script.
+- **Cause:** I left a placeholder password in plain text in the script.
 - **Fix:** removed it and let RDS manage the master password in Secrets Manager.
 - **Learning:** secrets never belong in code or user-data scripts.
 
 ---
 
-## Phase 2: Infrastructure as Code (Terraform)
+## Cost considerations
 
-The same architecture is created with Terraform in `main.tf`: VPC and subnets, security groups, ALB and target group, launch template, Auto Scaling Group, IAM role for SSM, and RDS.
-
-```bash
-terraform init      # download providers and set up the remote backend
-terraform plan      # preview what will change
-terraform apply     # create the infrastructure (needs approval)
-terraform destroy   # clean up when done
-```
+- **No NAT Gateway.** It is billed every hour and is not covered by free credits, so I did not use one.
+- **`t3.micro` instances** and a small RDS instance keep the cost low.
+- **Everything is destroyed after testing** with `terraform destroy`.
 
 ---
 
-## Phase 3: CI/CD pipeline (GitHub Actions)
+## Design decisions and limitations
 
-- **Trigger:** a push to `main` automatically runs `terraform plan`.
-- **Approval:** a manual review is required before `terraform apply` runs.
-- **State management:** remote state in an S3 bucket with a DynamoDB table for state locking, so two runs can never change the same infrastructure at once.
+I kept these choices on purpose because this is a low-cost learning project. Here is what I would change in production:
 
----
-
-## Design decisions and trade-offs
-
-- **No NAT Gateway.** It costs money every hour and is not covered by free credits. The instances sit in public subnets, but their security group only accepts traffic from the load balancer. In production I would use private subnets with one NAT Gateway per AZ.
-- **RDS is Single-AZ.** The free plan did not allow Multi-AZ. In production I would enable Multi-AZ for automatic database failover.
-- **Resources were destroyed after testing** to keep the cost close to zero.
+| Current choice | Why | Production change |
+| --- | --- | --- |
+| Servers in public subnets (locked down by `web-sg`) | A NAT Gateway costs money every hour | Private subnets with a NAT Gateway per AZ |
+| RDS is Single-AZ | The free plan did not allow Multi-AZ | Enable Multi-AZ for automatic database failover |
+| HTTP only | No domain name for an HTTPS certificate | Route 53 + ACM certificate, redirect HTTP to HTTPS |
+| Database not used by the app for data yet | Focus was on infrastructure and its protection | Add a small app that stores data in RDS |
 
 ---
 
-## What this project covers
+## Future improvements
 
-VPC design and routing, security group chaining, load balancing, Auto Scaling and health checks, private database placement, secrets management, Terraform with remote state, CI/CD with GitHub Actions, cost awareness, and troubleshooting.
-
----
-
-## Next steps
-
-- Move the instances to private subnets behind NAT Gateways
-- Enable RDS Multi-AZ
-- Add CloudWatch alarms with notifications
+- Move instances to private subnets with NAT Gateways
+- Enable RDS Multi-AZ and test failover
+- Add HTTPS with ACM and Route 53
+- Add CloudWatch alarms with SNS email notifications
+- Add a CPU-based Auto Scaling policy and test it
 - Record a short demo of the Terraform-built stack
 
 ---
@@ -148,12 +186,12 @@ VPC design and routing, security group chaining, load balancing, Auto Scaling an
 ```
 .
 ├── README.md
-├── main.tf
+├── main.tf                 # all infrastructure
 ├── .gitignore
 ├── .terraform.lock.hcl
-├── .github/workflows/     # GitHub Actions pipeline
-├── scripts/user-data.sh   # EC2 bootstrap script
-└── screenshots/           # Proof of the failover test
+├── .github/workflows/      # GitHub Actions pipeline
+├── scripts/user-data.sh    # EC2 bootstrap script
+└── screenshots/            # evidence of the failure test
 ```
 
 ---
