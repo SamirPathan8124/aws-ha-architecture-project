@@ -195,7 +195,7 @@ resource "aws_lb_target_group" "web_tg" {
   vpc_id   = aws_vpc.main.id
 
   health_check {
-    path                = "/health"
+    path                = "/"
     protocol            = "HTTP"
     matcher             = "200"
     interval            = 30
@@ -235,34 +235,45 @@ iam_instance_profile {
     security_groups             = [aws_security_group.web_sg.id]
   }
 
-  user_data = base64encode(<<-EOF
-  #!/bin/bash
+user_data = base64encode(<<-EOF
+#!/bin/bash
+  exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
+  set -x
   yum update -y
   yum install -y python3 python3-pip git
   pip3 install flask
   
   # Create a simple Flask app directory
   mkdir -p /app
-  cat << 'EOT' > /app/app.py
-  from flask import Flask
-  import urllib.request
-  
-  app = Flask(__name__)
+cat << 'EOT' > /app/app.py
+from flask import Flask
+import urllib.request
 
-  @app.route('/')
-  def home():
-      try:
-          instance_id = urllib.request.urlopen('http://169.254.169.254/latest/meta-data/instance-id').read().decode()
-          az = urllib.request.urlopen('http://169.254.169.254/latest/meta-data/placement/availability-zone').read().decode()
-      except:
-          instance_id = "Local"
-          az = "Unknown"
-          
-      return f"<h1>Hello from High Availability Web Server</h1><p>Instance ID: {instance_id}</p><p>Availability Zone: {az}</p>"
+app = Flask(__name__)
 
-  if __name__ == '__main__':
-      app.run(host='0.0.0.0', port=80)
-  EOT
+def imds(path):
+    req = urllib.request.Request(
+        'http://169.254.169.254/latest/api/token', method='PUT',
+        headers={'X-aws-ec2-metadata-token-ttl-seconds': '21600'})
+    token = urllib.request.urlopen(req, timeout=2).read().decode()
+    req = urllib.request.Request(
+        'http://169.254.169.254/latest/meta-data/' + path,
+        headers={'X-aws-ec2-metadata-token': token})
+    return urllib.request.urlopen(req, timeout=2).read().decode()
+
+@app.route('/')
+def home():
+    try:
+        instance_id = imds('instance-id')
+        az = imds('placement/availability-zone')
+    except Exception:
+        instance_id = "Local"
+        az = "Unknown"
+    return f"<h1>Hello from High Availability Web Server</h1><p>Instance ID: {instance_id}</p><p>Availability Zone: {az}</p>"
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=80)
+EOT
 
   # Run Flask app in background on port 80
   python3 /app/app.py &
