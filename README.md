@@ -1,6 +1,6 @@
 # Highly Available Web Architecture on AWS
 
-A highly available, auto-healing web application on AWS (region `ap-south-1`, Mumbai), built in three phases: manually in the console, then as Infrastructure as Code with Terraform, then with a CI pipeline on GitHub Actions.
+A highly available, auto-healing web application on AWS (region `ap-south-1`, Mumbai), built in four phases: manually in the console, then as Infrastructure as Code with Terraform, then with a CI pipeline on GitHub Actions.
 
 **Stack:** VPC · Application Load Balancer · Auto Scaling Group · EC2 (Amazon Linux 2023) · RDS MySQL · Secrets Manager · IAM · Terraform · GitHub Actions · Flask
 
