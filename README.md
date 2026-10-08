@@ -1,162 +1,150 @@
-# AWS High Availability Architecture
+# Highly Available Web Architecture on AWS
 
-A highly available web tier on AWS, first built in the console (Phase 1), then rebuilt with Terraform (Phase 2) and deployed through a GitHub Actions pipeline (Phase 3). Tested by terminating a server while the site stayed up.
+A highly available, auto-healing web application on AWS (region `ap-south-1`, Mumbai), built in three phases: manually in the console, then as Infrastructure as Code with Terraform, then with a CI pipeline on GitHub Actions.
 
-> Built as a learning project in `ap-south-1` (Mumbai). Resources were torn down after testing to avoid cost.
-
-## Architecture
-
-![Architecture diagram]
-
-```
-Internet
-   |
-   v
-Application Load Balancer (public subnets, 2 AZs)   <- alb-sg
-   |
-   v
-Auto Scaling Group: 2-4 x EC2 t3.micro (public subnets, 2 AZs)       <- web-sg
-   |
-   v
-RDS MySQL (private subnets)                          <- db-sg
-```
-
-## What I built
-
-| Layer | Service | Details |
-|---|---|---|
-| Network | VPC | `10.0.0.0/16` |
-| Load balancing | ALB + Target Groups | Public subnets |
-| Compute        | Launch Template + ASG | Public subnets (web-sg accepts traffic only from alb-sg) |
-| Database | RDS MySQL | Private subnet |
-| Monitoring | CloudWatch | System metrics |
-| Access | IAM | MFA on the root account |
-
-Each web server shows its private IP address.
-
-## Security design
-
-Traffic is allowed in a chained security group model:
-
-1. `alb-sg`: HTTP 80 from anywhere (`0.0.0.0/0`)
-2. `web-sg`: HTTP 80 **only** from `alb-sg`
-3. `db-sg`: MySQL 3306 **only** from `web-sg`
-
-Also:
-- No SSH port is open on any server (used Systems Manager Session Manager)
-- The database sits in private subnets with no internet gateway route
-- The database password is securely managed
-
-## Phase 1: Console build
-
-1. Opened the ALB URL and refreshed several times. The page alternated between the servers in ap-south-1a and ap-south-1b (different private IPs), so traffic was being spread across both AZs.
-2. Terminated the instance in ap-south-1a from the EC2 console and kept refreshing the ALB URL.
-3. The target group marked the terminated instance as unhealthy/draining, and the site kept responding from the 1b instance without going down.
-4. The Auto Scaling Group launched a replacement instance on its own, and the target group showed both targets healthy again after about 1 minutes.
-   
-
-| Event                        | Time (IST) | Action                         |
-| ---------------------------- | ---------- | ------------------------------ |
-| Instance terminated          | 18:07      | Manual termination for testing |
-| Replacement instance Running | 18:10      | Launched by the ASG            |
-| Both targets healthy again   | 18:11      | Checked in the ALB target group |
-
-
-Screenshots :
-
-* ![Targets healthy]
-  https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20181112.png
-* ![Response from 1a]
-  https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20180751.png
-* ![Response from 1b]
-  https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20174720.png
-* ![ASG activity after termination]
-  https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20181013.png
-* ![Security group rules]
-  https://github.com/SamirPathan8124/aws-ha-architecture-project/blob/main/screenshots/Screenshot%202026-10-04%20192123.png
-
-## Problems I hit and how I fixed them
-
-**502 Bad Gateway from the ALB**
-
-- Problem: opening the ALB URL gave 502 Bad Gateway, and the targets in the target group showed as unhealthy.
-- Cause: the instances were launched without a public IP, and this setup has no NAT Gateway. So they could not reach the internet, user-data could not install the web server, and the health checks failed.
-- Fix: enabled auto-assign public IP in the launch template and replaced the instances. The targets turned healthy and the site loaded.
-- Learning: the ALB talks to the instances over their private IPs, but the instances still need outbound internet access (public IP or NAT Gateway) to install packages. A 502 usually means the targets are unhealthy.
-
-**Hard-coded database password in user data**
-
-- Problem: while writing the user-data script I left a placeholder database password in plain text.
-- Fix: removed it from the script and [moved it to AWS Secrets Manager / passed it as a sensitive Terraform variable]. Kept `*.tfstate` out of the repo with `.gitignore`.
-- Learning: secrets do not belong in scripts or in the repo.
-
-## Phase 2: Infrastructure as Code (Terraform)
-
-   The same architecture is deployed via code.
-
-   terraform init,
-
-   terraform plan,
-
-   terraform apply, # needs approval
-   terraform destroy    # cleanup when done
-
- ![Terraform apply output]
-
-   <img width="955" height="467" alt="Screenshot 2026-10-06 000454" src="https://github.com/user-attachments/assets/d8fb0e60-  a1e7-4196-8ba6-def3945749fa" />
-<img width="958" height="467" alt="Screenshot 2026-10-06 000536" src="https://github.com/user-attachments/assets/5b050ef5-b3c6-432e-8d17-3cbd6c8fa411" />
+**Stack:** VPC · Application Load Balancer · Auto Scaling Group · EC2 (Amazon Linux 2023) · RDS MySQL · Secrets Manager · IAM · Terraform · GitHub Actions · Flask
 
 ---
 
-# Phase 3: CI/CD Pipeline & Automation
+## Architecture
 
-Automated deployment workflow using GitHub Actions.
+```
+                         Internet
+                            |
+                   [ Internet Gateway ]
+                            |
+              +-------------+-------------+
+              |   Application Load Balancer   (HTTP :80)
+              +------+--------------+-----+
+                     |              |
+        Public subnet 1a      Public subnet 1b
+        +--------------+      +--------------+
+        |  EC2 (Flask) |      |  EC2 (Flask) |   <- Auto Scaling Group
+        +------+-------+      +------+-------+      min 2 / desired 2 / max 4
+               |                     |
+        Private subnet 1a     Private subnet 1b
+        +--------------------------------------+
+        |   RDS MySQL (DB subnet group)        |
+        |   master password in Secrets Manager |
+        +--------------------------------------+
+```
 
-- **Trigger:** Push to 'main' branch automatically runs 'terraform plan'.
-- **Approval:** Manual review and approval required before running 'terraform apply'.
-- **State Management:** Remote backend configured with AWS S3 and DynamoDB table for state locking.
+| Component | Details |
+|---|---|
+| VPC | 2 public + 2 private subnets across 2 Availability Zones, Internet Gateway, route tables |
+| Load balancer | Internet-facing ALB, HTTP listener on port 80, target group with health checks |
+| Compute | Auto Scaling Group (min 2, desired 2, max 4) using a Launch Template, `t3.micro`, Amazon Linux 2023 |
+| Application | Small Flask app on port 80 that shows the instance ID and Availability Zone serving the request |
+| Database | RDS MySQL 8.0 (`db.t3.micro`) in private subnets, only reachable from the web security group |
+| Secrets | RDS master password managed by AWS Secrets Manager (no password in code or state files) |
+| IAM | Instance role and profile allowing instances to read the DB secret |
+| Security groups | ALB (public :80) → web (from ALB only) → DB (from web only) |
 
-## Design decisions and trade-offs
+---
 
-- [ ] Enable Multi-AZ on RDS and test failover
-- [ ] Add an HTTPS listener (ACM certificate) on the ALB
-- [ ] Add CloudWatch alarms and an Auto Scaling policy
-- [ ] Connect a small app to the database
+## Phases
 
-## What this project covers
+### Phase 1: Manual build (AWS Console)
+Built the whole stack by hand to understand each service: VPC and subnets, security groups, ALB with target group, Launch Template, Auto Scaling Group and RDS. Verified that traffic reaches the instances through the ALB and that targets turn healthy.
 
-​   VPC design and routing, security group chaining, load balancing, Auto Scaling and health checks, private database  placement, CloudWatch alarms, Terraform basics, cost awareness, troubleshooting.
+### Phase 2: Infrastructure as Code (Terraform)
+Recreated the same architecture in a single `main.tf`, so the whole environment can be created with `terraform apply` and removed with `terraform destroy`.
+
+### Phase 3: CI with GitHub Actions
+A **Terraform CI** workflow runs on every push and pull request (formatting and validation checks), so broken Terraform is caught before it reaches `main`.
+
+### Phase 4: Hardening and improvements
+- AMI is no longer hardcoded: the Launch Template reads the latest Amazon Linux 2023 AMI from an **SSM public parameter**.
+- App uses **IMDSv2** (token-based metadata) to show the real instance ID and AZ.
+- RDS uses a **Secrets Manager managed master password** (`manage_master_user_password = true`) instead of a plain password.
+- Rolling **Instance Refresh** to replace instances with zero downtime.
+
+---
+
+## Screenshots
+
+> Replace the file names below with your own screenshot files in the `screenshots/` folder.
+
+| What it shows | Screenshot |
+|---|---|
+| App served from AZ `ap-south-1a` | `screenshots/app-az-1a.png` |
+| App served from AZ `ap-south-1b` | `screenshots/app-az-1b.png` |
+| Target group: both targets healthy | `screenshots/targets-healthy.png` |
+| Auto Scaling Group details | `screenshots/asg-details.png` |
+| Instance refresh: Successful | `screenshots/instance-refresh.png` |
+| EC2 instances in two AZs | `screenshots/ec2-instances.png` |
+| RDS: master credentials managed by Secrets Manager | `screenshots/rds-secret.png` |
+| `terraform apply` complete | `screenshots/terraform-apply.png` |
+
+![App on AZ 1a](screenshots/app-az-1a.png)
+![App on AZ 1b](screenshots/app-az-1b.png)
+
+---
+
+## How high availability works here
+
+- **Two Availability Zones:** instances are spread over two AZs, so one AZ failing does not take the site down.
+- **Health checks:** the ALB only sends traffic to targets that pass the health check.
+- **Self-healing:** the Auto Scaling Group keeps the desired number of instances and launches a replacement if one is terminated or becomes unhealthy.
+- **Rolling replacement:** during Instance Refresh (50% minimum healthy), old instances drained while new ones came up, and the site stayed available.
+
+---
+
+## Deploy it yourself
+
+**Prerequisites:** AWS account, AWS CLI configured, Terraform installed.
+
+```bash
+git clone https://github.com/SamirPathan8124/aws-ha-architecture-project.git
+cd aws-ha-architecture-project
+
+terraform init
+terraform plan
+terraform apply
+```
+
+Open the ALB DNS name (shown in the EC2 console under Load Balancers) in a browser using **`http://`**. Reload a few times; the instance ID and AZ change as the ALB balances traffic.
+
+### Tear down (important, to avoid charges)
+
+```bash
+terraform destroy
+```
+
+---
+
+## Issues I ran into and how I fixed them
+
+| Problem | Cause | Fix |
+|---|---|---|
+| Terraform "No changes" after editing AMI | I was editing on the `main` branch on GitHub, but working in a different branch locally | Merged `origin/main` into my branch and edited the right file |
+| `Invalid index` on the IAM policy | Policy referenced the RDS managed secret before it existed | Applied the RDS change first with `-target`, then did the full apply |
+| Targets unhealthy after changing health check to `/health` | The app had no `/health` route | Set the health check path back to `/` |
+| App showed `Instance ID: Local`, `AZ: Unknown` | Amazon Linux 2023 requires **IMDSv2**; plain metadata requests fail | Rewrote the app to fetch a session token first |
+| User-data script failed in under a second | `#!/bin/bash` was indented inside the Terraform heredoc, so it was not the first characters of the script | Aligned the shebang to the heredoc's base indentation |
+| `yum`/package behaviour differs from Amazon Linux 2 | Different OS release | Verified the user-data on AL2023 using the instance system log |
+
+---
 
 ## What I learned
 
-- How chained security groups work: the web servers only accept traffic from the load balancer, and the database only from the web servers.
-- How the ALB health checks decide which instances get traffic, and why a failing health check shows up as a 502.
-- How the Auto Scaling Group replaces a terminated instance without any manual step.
-- How to rebuild the console setup in Terraform and run it through a GitHub Actions pipeline.
+- Designing a multi-AZ architecture and why each layer sits in a public or private subnet.
+- Terraform workflow: plan before apply, targeted applies, reading plan output for `replace` vs `update in-place`.
+- Why metadata service versions matter (IMDSv2) and how to debug boot-time scripts from the EC2 system log.
+- Handling secrets properly with Secrets Manager and IAM instead of storing passwords in code.
+- Safe rollouts with Auto Scaling Instance Refresh.
 
-## Roadmap
+---
 
-- [ ] Phase 1: build and test in the AWS console
-- [ ] Phase 2: rebuild everything with Terraform (`terraform/`)
-- [ ] Phase 3: GitHub Actions pipeline for `terraform plan` /validate/ `apply`
-- [ ] Record a demo from the Terraform-built stack
+## Cost note
 
-## Repo structure
+ALB, RDS and Secrets Manager are not fully covered by the AWS Free Tier. Run `terraform destroy` when you finish testing.
 
-```
-.
-├── README.md
-├── main.tf
-├── .gitignore
-├── .terraform.lock.hcl
-├── .github/workflows/
-├── scripts/user-data.sh
-└── Project 1 screenshots/
-```
+## Possible next steps
 
-## About
-
-Built by Samir Pathan as a hands-on portfolio project to practice cloud infrastructure and high availability on AWS.
-Certifications: Google Cloud Cybersecurity Professional, AWS Generative AI and AI Agents with Amazon Bedrock, Designing Hybrid and Multicloud Architectures, Cloud Native, Microservices, Containers, DevOps and Agile.
-
-LinkedIn: [www.linkedin.com/in/samir-pathan-218b84239]
+- HTTPS with ACM and a custom domain (Route 53)
+- RDS Multi-AZ standby for database failover
+- Auto Scaling policies based on CPU
+- `terraform apply` in CI with remote state (S3 + DynamoDB lock)
+- CloudWatch dashboards and alarms
+-
