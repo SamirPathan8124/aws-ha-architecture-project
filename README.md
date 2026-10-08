@@ -79,7 +79,7 @@ I built everything manually in the console first to understand how each piece co
 | ![Response from server 1a](screenshots/Screenshot%202026-10-04%20180751.png) | ![Response from server 1b](screenshots/Screenshot%202026-10-04%20174720.png) |
 | Response from the server in AZ 1a | Response from the server in AZ 1b |
 | ![Security group rules](screenshots/Screenshot%202026-10-04%20192123.png) | |
-| ![Security group rules]
+|  Security group rules
 
 ---
 
