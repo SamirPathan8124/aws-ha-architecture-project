@@ -67,17 +67,17 @@ A **Terraform CI** workflow runs on every push and pull request (formatting and 
 
 | What it shows | Screenshot |
 |---|---|
-| App served from AZ `ap-south-1a` | `screenshots/app-az-1a.png` |
-| App served from AZ `ap-south-1b` | `screenshots/app-az-1b.png` |
-| Target group: both targets healthy | `screenshots/targets-healthy.png` |
-| Auto Scaling Group details | `screenshots/asg-details.png` |
-| Instance refresh: Successful | `screenshots/instance-refresh.png` |
-| EC2 instances in two AZs | `screenshots/ec2-instances.png` |
-| RDS: master credentials managed by Secrets Manager | `screenshots/rds-secret.png` |
-| `terraform apply` complete | `screenshots/terraform-apply.png` |
+| App served from AZ `ap-south-1a` | `C:\Users\LENOVO\OneDrive\Pictures\Screenshots\Screenshot 2026-10-08 190912.png` |
+| App served from AZ `ap-south-1b` | `"C:\Users\LENOVO\OneDrive\Pictures\Screenshots\Screenshot 2026-10-08 190831.png"` |
+| Target group: both targets healthy | `C:\Users\LENOVO\OneDrive\Pictures\Screenshots\Screenshot 2026-10-08 160102.png` |
+| Auto Scaling Group details | `C:\Users\LENOVO\OneDrive\Pictures\Screenshots\Screenshot 2026-10-08 191604.png` |
+| Instance refresh: Successful | `C:\Users\LENOVO\OneDrive\Pictures\Screenshots\Screenshot 2026-10-08 160136.png` |
+| EC2 instances in two AZs | `C:\Users\LENOVO\OneDrive\Pictures\Screenshots\Screenshot 2026-10-08 160202.png` |
+| RDS: master credentials managed by Secrets Manager | `C:\Users\LENOVO\OneDrive\Pictures\Screenshots\Screenshot 2026-10-08 160516.png` |
+| `terraform apply` complete | `"C:\aws-terraform-project screenshots\Screenshot 2026-10-06 154722.png""C:\aws-terraform-project screenshots\Screenshot 2026-10-06 154741.png"` |
 
-![App on AZ 1a](screenshots/app-az-1a.png)
-![App on AZ 1b](screenshots/app-az-1b.png)
+![App on AZ 1a]("C:\Users\LENOVO\OneDrive\Pictures\Screenshots\Screenshot 2026-10-08 190912.png")
+![App on AZ 1b]("C:\Users\LENOVO\OneDrive\Pictures\Screenshots\Screenshot 2026-10-08 190831.png")
 
 ---
 
