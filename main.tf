@@ -195,7 +195,7 @@ resource "aws_lb_target_group" "web_tg" {
   vpc_id   = aws_vpc.main.id
 
   health_check {
-    path                = "/"
+    path                = "/health"
     protocol            = "HTTP"
     matcher             = "200"
     interval            = 30
@@ -216,11 +216,19 @@ resource "aws_lb_listener" "http" {
   }
 }
 
+data "aws_ssm_parameter" "al2023" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+}
+
 # 10. Launch Template for Auto Scaling Group (with Apache User Data showing Instance ID & AZ)
 resource "aws_launch_template" "web_lt" {
   name_prefix   = "ha-web-lt-"
-  image_id      = "ami-0f58b397bc5c1f2e8"
+  image_id      = data.aws_ssm_parameter.al2023.value
   instance_type = "t3.micro"
+
+iam_instance_profile {
+  name = aws_iam_instance_profile.web_profile.name
+}
 
   network_interfaces {
     associate_public_ip_address = true
@@ -228,14 +236,36 @@ resource "aws_launch_template" "web_lt" {
   }
 
   user_data = base64encode(<<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
-    AZ=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
-    echo "<h1>Hello from High Availability Web Server</h1><p>Instance ID: $INSTANCE_ID</p><p>Availability Zone: $AZ</p>" > /var/www/html/index.html
+  #!/bin/bash
+  yum update -y
+  yum install -y python3 python3-pip git
+  pip3 install flask
+  
+  # Create a simple Flask app directory
+  mkdir -p /app
+  cat << 'EOT' > /app/app.py
+  from flask import Flask
+  import urllib.request
+  
+  app = Flask(__name__)
+
+  @app.route('/')
+  def home():
+      try:
+          instance_id = urllib.request.urlopen('http://169.254.169.254/latest/meta-data/instance-id').read().decode()
+          az = urllib.request.urlopen('http://169.254.169.254/latest/meta-data/placement/availability-zone').read().decode()
+      except:
+          instance_id = "Local"
+          az = "Unknown"
+          
+      return f"<h1>Hello from High Availability Web Server</h1><p>Instance ID: {instance_id}</p><p>Availability Zone: {az}</p>"
+
+  if __name__ == '__main__':
+      app.run(host='0.0.0.0', port=80)
+  EOT
+
+  # Run Flask app in background on port 80
+  python3 /app/app.py &
   EOF
   )
 
@@ -283,7 +313,7 @@ resource "aws_db_instance" "mysql_db" {
   allocated_storage      = 20
   db_name                = "mydb"
   username               = "adminuser"
-  password               = "SecurePassword123!" # Production mein ise variables ya secrets manager se lein
+  manage_master_user_password = true
   db_subnet_group_name   = aws_db_subnet_group.db_subnet_group.name
   vpc_security_group_ids = [aws_security_group.db_sg.id]
   publicly_accessible    = false
@@ -293,4 +323,39 @@ resource "aws_db_instance" "mysql_db" {
   tags = {
     Name = "ha-rds-mysql"
   }
+}
+
+resource "aws_iam_role" "web_role" {
+  name = "ha-web-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ssm" {
+  role       = aws_iam_role.web_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy" "read_db_secret" {
+  name = "read-db-secret"
+  role = aws_iam_role.web_role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "secretsmanager:GetSecretValue"
+      Resource = aws_db_instance.mysql_db.master_user_secret[0].secret_arn
+    }]
+  })
+}
+
+resource "aws_iam_instance_profile" "web_profile" {
+  name = "ha-web-profile"
+  role = aws_iam_role.web_role.name
 }
