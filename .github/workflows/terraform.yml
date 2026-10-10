@@ -11,6 +11,10 @@ jobs:
     name: "Terraform Validate & Plan"
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: project1-ha
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
