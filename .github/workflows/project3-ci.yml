@@ -60,3 +60,23 @@ jobs:
           IMAGE=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ github.sha }}
           docker build -t $IMAGE project3-platform/app
           docker push $IMAGE
+  security:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image for scan
+        run: docker build -t devops-app:scan project3-platform/app
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: devops-app:scan
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "0"
+      - name: Checkov Terraform scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: project3-platform/terraform
+          framework: terraform
+          soft_fail: true

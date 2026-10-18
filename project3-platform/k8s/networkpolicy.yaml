@@ -1,0 +1,15 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: devops-app-ingress
+  namespace: p3
+spec:
+  podSelector:
+    matchLabels:
+      app: devops-app
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 5000
+          protocol: TCP
