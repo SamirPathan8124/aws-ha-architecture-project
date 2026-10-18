@@ -24,6 +24,7 @@ resource "aws_iam_role_policy_attachment" "cluster" {
 resource "aws_eks_cluster" "this" {
   name                      = var.name
   role_arn                  = aws_iam_role.cluster.arn
+  version                   = "1.35"
   enabled_cluster_log_types = ["api", "audit"]
 
   vpc_config {
