@@ -40,8 +40,8 @@ resource "aws_iam_role_policy" "ecr_push" {
       { Effect = "Allow", Action = "ecr:GetAuthorizationToken", Resource = "*" },
       { Effect = "Allow",
         Action = ["ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload",
-                  "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage"],
-        Resource = var.ecr_repository_arn }
+        "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage"],
+      Resource = var.ecr_repository_arn }
     ]
   })
 }

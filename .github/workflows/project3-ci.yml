@@ -1,0 +1,62 @@
+name: project3-ci
+
+on:
+  push:
+    branches: [project3-platform, main]
+    paths:
+      - "project3-platform/**"
+      - ".github/workflows/project3-ci.yml"
+  pull_request:
+    paths:
+      - "project3-platform/**"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPO: p3-devops-app
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform fmt and validate
+        working-directory: project3-platform/terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false
+          terraform validate
+      - name: Lint Kubernetes YAML
+        run: |
+          pip install yamllint
+          yamllint -d relaxed project3-platform/k8s
+
+  build:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t devops-app:${{ github.sha }} project3-platform/app
+
+  push:
+    needs: build
+    if: ${{ github.event_name == 'push' && vars.AWS_ROLE_ARN != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push image
+        run: |
+          IMAGE=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ github.sha }}
+          docker build -t $IMAGE project3-platform/app
+          docker push $IMAGE
