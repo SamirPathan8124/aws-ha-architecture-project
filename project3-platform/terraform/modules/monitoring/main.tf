@@ -11,7 +11,7 @@ resource "aws_sns_topic_subscription" "email" {
 }
 
 resource "aws_cloudwatch_log_group" "app" {
-  name              = "/p3/app"
+  name              = "/aws/containerinsights/p3-eks/application"
   retention_in_days = 7
 }
 
