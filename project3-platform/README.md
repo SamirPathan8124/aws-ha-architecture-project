@@ -121,9 +121,9 @@ The EKS control plane is billed per hour, so it is the main cost driver. I kept 
 
 ## Cleanup
 
-- `aws elb` and `aws elbv2 describe-load-balancers` returned an empty list afterwards. Deleted the Kubernetes service first so the load balancer was removed, then deleted the ECR images.
+- `aws elb` and `aws elbv2 describe-load-balancers` returned an empty list afterwards. Deleted the Kubernetes service first     so the load balancer was removed, then deleted the ECR images.
 - `terraform destroy` removed all 44 resources.
-- Leftover check done in Mumbai and Singapore. The only leftovers were CloudWatch log groups (Container Insights, Application Signals, the EKS cluster group and service events), which I deleted by hand.
+- Leftover check done in Mumbai and Singapore. The only leftovers were CloudWatch log groups (Container Insights,  Application Signals, the EKS cluster group and service events), which I deleted by hand.
 
 ## What this project covers
 
