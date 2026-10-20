@@ -194,12 +194,3 @@ I kept these choices on purpose because this is a low-cost learning project. Her
 └── screenshots/            # evidence of the failure test
 ```
 
----
-
-## About
-
-Built by **Samir Pathan** as a hands-on portfolio project to practice cloud infrastructure and high availability on AWS.
-
-**Certifications:** Google Cloud Cybersecurity Professional · AWS Generative AI and AI Agents with Amazon Bedrock · Designing Hybrid and Multicloud Architectures · Cloud Native, Microservices, Containers, DevOps and Agile
-
-**LinkedIn:** [samir-pathan-218b84239](https://www.linkedin.com/in/samir-pathan-218b84239)
