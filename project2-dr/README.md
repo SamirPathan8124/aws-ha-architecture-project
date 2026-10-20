@@ -45,8 +45,6 @@ Providers for both regions are configured in `providers.tf`. Each phase has its 
 
 Phase 1 proof: two versions of `test.txt` in the Mumbai bucket.
 
-
-
 ![S3 versioning: two versions of test.txt](screenshots/s3-versioning.png)
 
 ## Results
@@ -56,8 +54,8 @@ Phase 1 proof: two versions of `test.txt` in the Mumbai bucket.
 | S3 replication status | COMPLETED |
 | RDS replica lag (idle database) | 0.0 seconds |
 | RDS replica promotion to standalone | About 10 minutes |
-| Pilot light failover (ASG scale-up until DR page opened) | About 15 minutes |
-| **Application RTO** | **About 15 minutes** |
+| Pilot light failover (ASG scale-up until DR page opened) | About 10 to 15 minutes |
+| **Application RTO** | **About 10 to 15 minutes** |
 | **RPO** | **Close to 0 seconds on an idle database** (replica lag 0.0 s). Not tested under load, so real lag may be higher. |
 
 Screenshots:
@@ -75,9 +73,6 @@ Screenshots:
   3. Open the DR page through the Singapore ALB.
 
   ![Singapore ASG at desired capacity 0 (pilot light)](screenshots/pilot-light-asg.png)
-
-
-
 
   ![ASG scaled up during the failover test](screenshots/asg-scale-up.png)
 
@@ -102,10 +97,6 @@ Cost Explorer showed $0.00 at first because billing data arrives with a delay. T
 
 ![Cost Explorer: cost by service](screenshots/cost-explorer1.png)
 
-
-
-
-
 ![Cost Explorer: second view](screenshots/cost-explorer2.png)
 
 ### DR strategy comparison
@@ -113,7 +104,7 @@ Cost Explorer showed $0.00 at first because billing data arrives with a delay. T
 | Strategy | Idea | Cost | RTO |
 | -------- | ---- | ---- | --- |
 | Backup and restore | Only backups in the DR region | Low | Hours |
-| **Pilot light (built)** | Core pieces on, servers off | Low to medium | About 15 min (measured) |
+| **Pilot light (built)** | Core pieces on, servers off | Low to medium | About 10 to 15 min (measured) |
 | Warm standby | Small working copy always running | Medium to high | Minutes |
 | Active-active | Full copy serving traffic in both regions | High | Near zero |
 
@@ -132,7 +123,7 @@ Cost and RTO for the other strategies are estimates. Only the pilot light RTO wa
 - Learning: Terraform destroys only what it manages. Always do a manual leftover check afterwards.
 
 **Destroying RDS separately**
-- I removed both RDS instances first with `terraform destroy -target`, because they were the main cost driver, and destroyed the rest afterwards.
+- I destroyed both RDS instances first with `terraform destroy -target` after the Phase 3 test to stop charges, and destroyed the rest at the end.
 
 ## Limitations and trade-offs
 
