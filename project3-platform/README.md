@@ -66,10 +66,10 @@ project3-platform/
 | CI run (validate, build, security) | Green |
 | `terraform destroy` | 44 resources destroyed |
 
-![Pods running with 0 restarts, /health returns ok, load balancer removed](screenshots/pods-and-health.png)
-![App in the browser](screenshots/browser.png)
-![CloudWatch log groups](screenshots/cloudwatch-logs.png)
-![Green CI run](screenshots/ci-green.png)
+![Pods running with 0 restarts, /health returns ok, load balancer removed](docs/screenshots/pods-and-health.png)
+![App in the browser](docs/screenshots/browser.png)
+![CloudWatch log groups](docs/screenshots/cloudwatch-logs.png)
+![Green CI run](docs/screenshots/ci-green.png)
 
 ## CI/CD and security
 
@@ -87,7 +87,7 @@ project3-platform/
 
 The EKS control plane is billed per hour, so it is the main cost driver. I kept the live run short and destroyed everything the same day. The actual spend for the run is in the Cost Explorer screenshot below (date range Oct 18 to Oct 19, grouped by service).
 
-![Cost Explorer for the live run](screenshots/cost-explorer.png)
+![Cost Explorer for the live run](docs/screenshots/cost-explorer.png)
 
 ## Problems I hit and how I fixed them
 
